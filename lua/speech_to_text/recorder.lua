@@ -5,20 +5,105 @@ local state = {
   recording = false,
   job_id = nil,
   output_file = "/tmp/nvim_speech_to_text/speech_record.wav",
-  input_device = "default"
+  input_device = "default",
+  playback_command = "ffplay -nodisp -autoexit", -- Default player
+  players = {                                    -- Available players
+    { name = "FFplay", cmd = "ffplay -nodisp -autoexit" },
+    { name = "mpv",    cmd = "mpv --no-video" },
+    { name = "cvlc",   cmd = "cvlc --play-and-exit" },
+  },
 }
+
 
 -- Configuration with user-modifiable options
 M.config = {
   output_directory = "/tmp/nvim_speech_to_text",
   file_format = "wav",
   sample_rate = "44100",
-  bit_depth = "16"
+  bit_depth = "16",
+  playback_command = "ffplay -nodisp -autoexit", -- Default player
+  players = {                                    -- Available players
+    { name = "FFplay", cmd = "ffplay -nodisp -autoexit" },
+    { name = "mpv",    cmd = "mpv --no-video" },
+    { name = "cvlc",   cmd = "cvlc --play-and-exit" },
+  },
 }
 
 -- Check if a command is available
 local function command_exists(cmd)
   return vim.fn.executable(cmd) == 1
+end
+
+-- Function to play audio file
+function M.play_audio(file_path)
+  if not file_path or vim.fn.filereadable(file_path) == 0 then
+    vim.notify("Invalid audio file: " .. (file_path or "nil"), vim.log.levels.ERROR)
+    return
+  end
+
+  -- Extract just the command name for executable check
+  local cmd_name = M.config.playback_command:match("^(%S+)")
+  if not command_exists(cmd_name) then
+    vim.notify("Playback command not found: " .. cmd_name, vim.log.levels.ERROR)
+    return
+  end
+
+  -- Show playback notification
+  ui.show_popup("Playing audio...")
+
+  -- Build the command
+  local cmd = M.config.playback_command .. " " .. vim.fn.shellescape(file_path)
+
+  -- Run the playback command
+  local job_id = vim.fn.jobstart(cmd, {
+    on_exit = function(_, exit_code)
+      vim.schedule(function()
+        ui.close_popup()
+        if exit_code ~= 0 then
+          vim.notify("Playback failed with exit code: " .. exit_code, vim.log.levels.ERROR)
+        end
+      end)
+    end
+  })
+
+  if job_id <= 0 then
+    ui.close_popup()
+    vim.notify("Failed to start playback", vim.log.levels.ERROR)
+  end
+end
+
+-- Function to select playback command from available options
+function M.select_playback_command()
+  local pickers = require("telescope.pickers")
+  local finders = require("telescope.finders")
+  local conf = require("telescope.config").values
+  local actions = require("telescope.actions")
+  local action_state = require("telescope.actions.state")
+
+  -- Create a new picker for player selection
+  pickers.new({}, {
+    prompt_title = "Select Audio Player",
+    finder = finders.new_table {
+      results = M.config.players,
+      entry_maker = function(entry)
+        return {
+          value = entry.cmd,
+          display = entry.name,
+          ordinal = entry.name,
+        }
+      end
+    },
+    sorter = conf.generic_sorter({}),
+    attach_mappings = function(prompt_bufnr, _)
+      actions.select_default:replace(function()
+        actions.close(prompt_bufnr)
+        local selection = action_state.get_selected_entry()
+        M.config.playback_command = selection.value
+        vim.notify("Selected audio player: " .. selection.display, vim.log.levels.INFO)
+      end)
+      return true
+    end,
+  }):find()
 end
 
 -- Generate output filename with timestamp
@@ -28,6 +113,132 @@ local function generate_output_filename()
     M.config.output_directory,
     timestamp,
     M.config.file_format)
+end
+
+-- Lists all recordings in a Telescope finder
+function M.browse_recordings()
+  -- Check if telescope is installed
+  local has_telescope, _ = pcall(require, "telescope.builtin")
+  if not has_telescope then
+    vim.notify("Telescope is required for this feature", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Ensure output directory exists
+  vim.fn.mkdir(M.config.output_directory, "p")
+
+  local pickers = require("telescope.pickers")
+  local finders = require("telescope.finders")
+  local conf = require("telescope.config").values
+  local actions = require("telescope.actions")
+  local action_state = require("telescope.actions.state")
+  local previewers = require("telescope.previewers")
+
+  -- Custom file previewer with metadata
+  local file_previewer = previewers.new_termopen_previewer({
+    get_command = function(entry)
+      return { "ffprobe", "-hide_banner", entry.value }
+    end
+  })
+
+  -- Find all audio files
+  local audio_pattern = string.format("*.%s", M.config.file_format)
+  local files = vim.fn.glob(M.config.output_directory .. "/" .. audio_pattern, true, true)
+
+  -- Build entries with metadata
+  local entries = {}
+  for _, file in ipairs(files) do
+    local filename = vim.fn.fnamemodify(file, ":t")
+    local date_str = filename:match("recording_(%d%d%d%d%d%d%d%d_%d%d%d%d%d%d)")
+
+    if date_str then
+      -- Format as YYYY-MM-DD HH:MM:SS
+      local year = date_str:sub(1, 4)
+      local month = date_str:sub(5, 6)
+      local day = date_str:sub(7, 8)
+      local hour = date_str:sub(10, 11)
+      local min = date_str:sub(12, 13)
+      local sec = date_str:sub(14, 15)
+
+      local display_date = string.format("%s-%s-%s %s:%s:%s",
+        year, month, day, hour, min, sec)
+
+      table.insert(entries, {
+        path = file,
+        date = display_date,
+        size = vim.fn.getfsize(file),
+      })
+    end
+  end
+
+  -- Sort by date (newest first)
+  table.sort(entries, function(a, b)
+    return a.date > b.date
+  end)
+
+  -- Create the picker
+  pickers.new({}, {
+    prompt_title = "Speech Recordings",
+    finder = finders.new_table {
+      results = entries,
+      entry_maker = function(entry)
+        -- Convert size to human readable format
+        local size_str
+        if entry.size < 1024 then
+          size_str = string.format("%d B", entry.size)
+        elseif entry.size < 1024 * 1024 then
+          size_str = string.format("%.2f KB", entry.size / 1024)
+        else
+          size_str = string.format("%.2f MB", entry.size / (1024 * 1024))
+        end
+
+        return {
+          value = entry.path,
+          display = string.format("%s (%s)", entry.date, size_str),
+          ordinal = entry.date,
+        }
+      end
+    },
+    sorter = conf.generic_sorter({}),
+    previewer = file_previewer,
+    attach_mappings = function(prompt_bufnr, map)
+      -- Play on selection
+      actions.select_default:replace(function()
+        actions.close(prompt_bufnr)
+        local selection = action_state.get_selected_entry()
+        M.play_audio(selection.value)
+      end)
+
+      -- Delete with <c-d>
+      map("i", "<c-d>", function()
+        local selection = action_state.get_selected_entry()
+        actions.close(prompt_bufnr)
+
+        -- Confirm deletion
+        vim.ui.select({ "Yes", "No" }, {
+          prompt = "Delete recording " .. vim.fn.fnamemodify(selection.value, ":t") .. "?",
+        }, function(choice)
+          if choice == "Yes" then
+            -- Delete file
+            if pcall(os.remove, selection.value) then
+              vim.notify("Recording deleted", vim.log.levels.INFO)
+              -- Reopen browser
+              vim.defer_fn(function()
+                M.browse_recordings()
+              end, 100)
+            else
+              vim.notify("Failed to delete recording", vim.log.levels.ERROR)
+            end
+          else
+            -- Reopen browser if canceled
+            M.browse_recordings()
+          end
+        end)
+      end)
+
+      return true
+    end,
+  }):find()
 end
 
 -- Parse PulseAudio input sources from pactl
