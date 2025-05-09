@@ -4,13 +4,13 @@ local ui = require("speech_to_text.ui")
 local state = {
   recording = false,
   job_id = nil,
-  output_file = "/tmp/speech_record.wav",
+  output_file = "/tmp/nvim_speech_to_text/speech_record.wav",
   input_device = "default"
 }
 
 -- Configuration with user-modifiable options
 M.config = {
-  output_directory = "/tmp",
+  output_directory = "/tmp/nvim_speech_to_text",
   file_format = "wav",
   sample_rate = "44100",
   bit_depth = "16"
@@ -24,7 +24,7 @@ end
 -- Generate output filename with timestamp
 local function generate_output_filename()
   local timestamp = os.date("%Y%m%d_%H%M%S")
-  return string.format("%s/speech_record_%s.%s",
+  return string.format("%s/recording_%s.%s",
     M.config.output_directory,
     timestamp,
     M.config.file_format)
