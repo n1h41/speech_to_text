@@ -30,61 +30,77 @@ local function generate_output_filename()
     M.config.file_format)
 end
 
--- Parse arecord output
-local function parse_devices(output)
-  local devices = {}
+-- Parse PulseAudio input sources from pactl
+local function parse_pulse_sources(output)
+  local sources = {}
+  local current_source = {}
+  local in_source = false
+
   for line in output:gmatch("[^\r\n]+") do
-    local card, device, name = line:match("card (%d+):.-device (%d+): ([^%[]+)")
-    if card and device and name then
-      table.insert(devices, {
-        display = string.format("hw:%s,%s - %s", card, device, name:gsub("^%s*(.-)%s*$", "%1")),
-        value = string.format("hw:%s,%s", card, device),
-      })
+    -- Start of a new source description
+    if line:match("^Source #") then
+      if current_source.name and current_source.description then
+        table.insert(sources, {
+          display = current_source.description,
+          value = current_source.name,
+        })
+      end
+      current_source = {}
+      in_source = true
+      -- End of source descriptions
+    elseif in_source and line:match("^%s*$") then
+      in_source = false
+      if current_source.name and current_source.description then
+        table.insert(sources, {
+          display = current_source.description,
+          value = current_source.name,
+        })
+      end
+      current_source = {}
+      -- Parse source info
+    elseif in_source then
+      local name = line:match("^%s*Name:%s*(.+)$")
+      local description = line:match("^%s*Description:%s*(.+)$")
+
+      if name then
+        current_source.name = name
+      elseif description then
+        current_source.description = description
+      end
     end
   end
-  return devices
-end
 
--- Test if a device is actually working
-local function test_device(device)
-  local test_file = os.tmpname()
-  local test_success = false
+  -- Handle the last source if any
+  if in_source and current_source.name and current_source.description then
+    table.insert(sources, {
+      display = current_source.description,
+      value = current_source.name,
+    })
+  end
 
-  local job_id = vim.fn.jobstart({
-    "ffmpeg",
-    "-f", "alsa",
-    "-i", device,
-    "-t", "0.1", -- Record for 0.1 seconds
-    "-y",
-    test_file
-  }, {
-    on_exit = function(_, exit_code)
-      test_success = (exit_code == 0)
-      os.remove(test_file)
-    end,
-  })
-
-  -- Wait briefly for job to complete
-  vim.wait(500, function() return test_success ~= false end)
-  vim.fn.jobstop(job_id)
-
-  return test_success
+  return sources
 end
 
 -- Telescope input device selector
 function M.select_input_device()
-  if not command_exists("arecord") then
-    vim.notify("Error: 'arecord' not found. Please install ALSA utilities.", vim.log.levels.ERROR)
+  if not command_exists("pactl") then
+    vim.notify("Error: 'pactl' not found. Please install PulseAudio or PipeWire-PulseAudio.", vim.log.levels.ERROR)
     return
   end
 
-  local output = vim.fn.system("arecord -l")
-  local devices = parse_devices(output)
+  local output = vim.fn.system("pactl list sources")
+  local sources = parse_pulse_sources(output)
 
-  if #devices == 0 then
-    vim.notify("No input devices found via arecord.", vim.log.levels.WARN)
+  if #sources == 0 then
+    vim.notify("No input sources found via pactl.", vim.log.levels.WARN)
     return
   end
+
+  -- Add special case for default source
+  table.insert(sources, 1, {
+    display = "System Default Source",
+    value = "@DEFAULT_SOURCE@"
+  })
 
   local pickers = require("telescope.pickers")
   local finders = require("telescope.finders")
@@ -93,9 +109,9 @@ function M.select_input_device()
   local action_state = require("telescope.actions.state")
 
   pickers.new({}, {
-    prompt_title = "Select Audio Input Device",
+    prompt_title = "Select Audio Input Source",
     finder = finders.new_table {
-      results = devices,
+      results = sources,
       entry_maker = function(entry)
         return {
           value = entry.value,
@@ -110,20 +126,43 @@ function M.select_input_device()
         actions.close(prompt_bufnr)
         local selection = action_state.get_selected_entry()
 
-        -- Show testing notification
-        vim.notify("Testing device " .. selection.display .. "...", vim.log.levels.INFO)
+        -- Set up error capture
+        vim.api.nvim_create_autocmd("User", {
+          pattern = "SpeechToTextDeviceTestError",
+          once = true,
+          callback = function(event)
+            M._last_test_error = {
+              device = selection.display,
+              error = event.data.error
+            }
+          end
+        })
 
-        -- Test if the device works
-        if test_device(selection.value) then
-          state.input_device = selection.value
-          vim.notify("Selected input device: " .. selection.display, vim.log.levels.INFO)
-        else
-          vim.notify("Device test failed for: " .. selection.display, vim.log.levels.ERROR)
-        end
+        -- Skip testing
+        state.input_device = selection.value
+        vim.notify("Selected input source: " .. selection.display, vim.log.levels.INFO)
       end)
       return true
     end,
   }):find()
+end
+
+-- Try to find the best default source if none is set
+local function ensure_input_source()
+  -- If using default but it's not been specifically set, try to find a better one
+  if state.input_device == "default" then
+    -- Try to get the system default source from pactl
+    if command_exists("pactl") then
+      local default_source = vim.fn.trim(vim.fn.system("pactl info | grep 'Default Source' | cut -d: -f2"))
+      if default_source and #default_source > 0 then
+        state.input_device = default_source
+        return true
+      end
+    end
+    -- If that failed, use the special PulseAudio identifier
+    state.input_device = "@DEFAULT_SOURCE@"
+  end
+  return true
 end
 
 function M.start_recording()
@@ -132,10 +171,18 @@ function M.start_recording()
     return
   end
 
+  if not command_exists("pactl") then
+    vim.notify("Error: 'pactl' not found. Please install PulseAudio or PipeWire-PulseAudio.", vim.log.levels.ERROR)
+    return
+  end
+
   if state.recording then
     vim.notify("Recording is already in progress.", vim.log.levels.WARN)
     return
   end
+
+  -- Make sure we have a valid input source
+  ensure_input_source()
 
   -- Generate a new filename with timestamp
   state.output_file = generate_output_filename()
@@ -146,13 +193,13 @@ function M.start_recording()
   ui.show_popup("Recording...")
   state.recording = true
 
-  -- Create the FFmpeg command with configurable options
+  -- Create the FFmpeg command with PulseAudio input and better Bluetooth support
   local cmd = {
     "ffmpeg",
-    "-f", "alsa",
+    "-f", "pulse",
     "-i", state.input_device,
-    "-ar", M.config.sample_rate,
-    "-sample_fmt", "s" .. M.config.bit_depth,
+    "-ar", M.config.sample_rate, -- Sample rate
+    "-ac", "1",                  -- Mono recording often works better
     "-y",
     state.output_file
   }
