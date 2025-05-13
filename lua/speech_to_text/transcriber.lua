@@ -29,6 +29,7 @@ local function build_curl_command(file_path, opts)
 
   local params = {}
   if opts.encode ~= nil then table.insert(params, "encode=" .. tostring(opts.encode)) end
+  if opts.task then table.insert(params, "task=" .. opts.task) end
   if opts.language then table.insert(params, "language=" .. opts.language) end
   if opts.initial_prompt then table.insert(params, "initial_prompt=" .. vim.fn.shellescape(opts.initial_prompt)) end
   if opts.output then table.insert(params, "output=" .. opts.output) end
@@ -36,9 +37,9 @@ local function build_curl_command(file_path, opts)
   -- Append parameters to endpoint if any
   if #params > 0 then
     local query_string = table.concat(params, "&")
-    table.insert(cmd, endpoint .. "?" .. query_string)
+    table.insert(cmd, "'" .. endpoint .. "?" .. query_string .. "'")
     -- Remove the original endpoint which we've now replaced
-    table.remove(cmd, 4)
+    table.remove(cmd, 5)
   end
 
   -- Add the file
@@ -50,7 +51,7 @@ end
 
 function M.transcribe(file_path, opts)
   opts = opts or {}
-  opts = vim.tbl.tbl_deep_extend("force", config, opts)
+  opts = vim.tbl_deep_extend("force", config, opts)
 
   if not vim.fn.filereadable(file_path) then
     return nil, "File not found: " .. file_path
@@ -96,6 +97,7 @@ function M.transcribe_async(file_path, opts, callback)
             table.insert(stdout_data, line)
           end
         end
+        local test = vim.inspect(stdout_data)
       end
     end,
     on_stderr = function(_, data)
@@ -103,17 +105,20 @@ function M.transcribe_async(file_path, opts, callback)
         for _, line in ipairs(data) do
           if line and line ~= "" then
             table.insert(stdout_err, line)
+            print("CURL ERROR: " .. line)
           end
         end
       end
     end,
     on_exit = function(_, exit_code)
       if exit_code ~= 0 then
+        local test = vim.inspect(stdout_data)
         local error_msg = table.concat(stdout_err, "\n")
         if callback then
           callback(nil, "API request failed: " .. error_msg)
         end
       else
+        local test = vim.inspect(stdout_data)
         local response = table.concat(stdout_data, "\n")
         if callback then callback(response) end
       end
@@ -141,14 +146,14 @@ end
 
 -- Check if the API is available by sending a small request
 function M.check_availability(callback)
-  local cmd = { "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", config.endpoint }
+  local cmd = { "curl", "-s", "-X", "POST", "-o", "/dev/null", "-w", "%{http_code}", config.endpoint }
 
   if callback then
     -- Async version
     vim.fn.jobstart(cmd, {
       on_stdout = function(_, data)
         local status_code = tonumber(data[1])
-        callback(status_code >= 200 and status_code < 300)
+        callback(status_code >= 200 and status_code < 300 or status_code == 422)
       end,
       on_exit = function(_, exit_code)
         if exit_code ~= 0 then
@@ -161,6 +166,36 @@ function M.check_availability(callback)
     local status_code = tonumber(vim.fn.system(cmd))
     return status_code and status_code >= 200 and status_code < 300
   end
+end
+
+-- Detect the language of an audio file
+function M.detect_language(file_path, opts, callback)
+  opts = opts or {}
+  local detect_opts = vim.tbl_deep_extend("force", opts, {
+    endpoint = (opts.endpoint or config.endpoint):gsub("/asr$", "") .. "/detect-language",
+  })
+
+  if callback then
+    return M.transcribe_async(file_path, detect_opts, callback)
+  else
+    return M.transcribe(file_path, detect_opts)
+  end
+end
+
+-- Get list of supported languages from the API specification
+function M.get_supported_languages()
+  -- This is based on the OpenAPI specification
+  return {
+    "af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br", "bs",
+    "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "eu", "fa", "fi",
+    "fo", "fr", "gl", "gu", "ha", "haw", "he", "hi", "hr", "ht", "hu", "hy",
+    "id", "is", "it", "ja", "jw", "ka", "kk", "km", "kn", "ko", "la", "lb",
+    "ln", "lo", "lt", "lv", "mg", "mi", "mk", "ml", "mn", "mr", "ms", "mt",
+    "my", "ne", "nl", "nn", "no", "oc", "pa", "pl", "ps", "pt", "ro", "ru",
+    "sa", "sd", "si", "sk", "sl", "sn", "so", "sq", "sr", "su", "sv", "sw",
+    "ta", "te", "tg", "th", "tk", "tl", "tr", "tt", "uk", "ur", "uz", "vi",
+    "yi", "yo", "yue", "zh"
+  }
 end
 
 return M

@@ -1,5 +1,6 @@
 local M = {}
 local ui = require("speech_to_text.ui")
+local transcriber = require("speech_to_text.transcriber")
 
 local state = {
   recording = false,
@@ -498,6 +499,192 @@ function M.cancel_recording()
   end, 200)
 end
 
+-- Transcribe an audio recording
+function M.transcribe_audio(file_path, opts)
+  opts = opts or {}
+
+  -- Validate the file
+  if not file_path or vim.fn.filereadable(file_path) == 0 then
+    vim.notify("Invalid audio file: " .. (file_path or "nil"), vim.log.levels.ERROR)
+    return
+  end
+
+  -- Show transcribing notification
+  ui.show_popup("Transcribing audio...")
+
+  -- Call the transcriber
+  transcriber.transcribe_async(file_path, opts, function(text, err)
+    ui.close_popup()
+
+    if err then
+      vim.notify("Transcription failed: " .. err, vim.log.levels.ERROR)
+      return
+    end
+
+    if not text or text == "" then
+      vim.notify("Received empty transcription", vim.log.levels.WARN)
+      return
+    end
+
+    -- Display the transcription
+    ui.show_transcription(text, { title = "Transcription: " .. vim.fn.fnamemodify(file_path, ":t") })
+    vim.notify("Transcription completed", vim.log.levels.INFO)
+  end)
+end 
+
+-- Transcribe an audio recording
+--[[ function M.transcribe_audio(file_path, opts)
+  opts = opts or {}
+
+  -- Validate the file
+  if not file_path or vim.fn.filereadable(file_path) == 0 then
+    vim.notify("Invalid audio file: " .. (file_path or "nil"), vim.log.levels.ERROR)
+    return
+  end
+
+  -- Show transcribing notification
+  ui.show_popup("Transcribing audio...")
+
+  local text, err = transcriber.transcribe(file_path, opts)
+
+  ui.close_popup()
+
+  if err then
+    vim.notify("Transcription failed: " .. err, vim.log.levels.ERROR)
+    return
+  end
+
+  if not text or text == "" then
+    vim.notify("Received empty transcription", vim.log.levels.WARN)
+    return
+  end
+
+  ui.show_transcription(text, { title = "Transcription: " .. vim.fn.fnamemodify(file_path, ":t") })
+  vim.notify("Transcription completed", vim.log.levels.INFO)
+end ]]
+
+-- Open file selection and transcribe
+function M.transcribe_recording()
+  -- Check if transcriber is configured
+  --[[ if not transcriber.check_availability() then
+    vim.notify("The API server is not available. Check your configuration.", vim.log.levels.ERROR)
+    return
+  end ]]
+
+  -- Check if telescope is installed
+  local has_telescope, _ = pcall(require, "telescope.builtin")
+  if not has_telescope then
+    vim.notify("Telescope is required for this feature", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Ensure output directory exists
+  vim.fn.mkdir(M.config.output_directory, "p")
+
+  local pickers = require("telescope.pickers")
+  local finders = require("telescope.finders")
+  local conf = require("telescope.config").values
+  local actions = require("telescope.actions")
+  local action_state = require("telescope.actions.state")
+
+  -- Find all audio files
+  local audio_pattern = string.format("*.%s", M.config.file_format)
+  local files = vim.fn.glob(M.config.output_directory .. "/" .. audio_pattern, true, true)
+
+  -- Build entries with metadata
+  local entries = {}
+  for _, file in ipairs(files) do
+    local filename = vim.fn.fnamemodify(file, ":t")
+    local date_str = filename:match("recording_(%d%d%d%d%d%d%d%d_%d%d%d%d%d%d)")
+
+    if date_str then
+      -- Format as YYYY-MM-DD HH:MM:SS
+      local year = date_str:sub(1, 4)
+      local month = date_str:sub(5, 6)
+      local day = date_str:sub(7, 8)
+      local hour = date_str:sub(10, 11)
+      local min = date_str:sub(12, 13)
+      local sec = date_str:sub(14, 15)
+
+      local display_date = string.format("%s-%s-%s %s:%s:%s",
+        year, month, day, hour, min, sec)
+
+      table.insert(entries, {
+        path = file,
+        date = display_date,
+        size = vim.fn.getfsize(file),
+      })
+    end
+  end
+
+  -- Sort by date (newest first)
+  table.sort(entries, function(a, b)
+    return a.date > b.date
+  end)
+
+  -- Create the picker
+  pickers.new({}, {
+    prompt_title = "Select Recording to Transcribe",
+    finder = finders.new_table {
+      results = entries,
+      entry_maker = function(entry)
+        -- Convert size to human readable format
+        local size_str
+        if entry.size < 1024 then
+          size_str = string.format("%d B", entry.size)
+        elseif entry.size < 1024 * 1024 then
+          size_str = string.format("%.2f KB", entry.size / 1024)
+        else
+          size_str = string.format("%.2f MB", entry.size / (1024 * 1024))
+        end
+
+        return {
+          value = entry.path,
+          display = string.format("%s (%s)", entry.date, size_str),
+          ordinal = entry.date,
+        }
+      end
+    },
+    sorter = conf.generic_sorter({}),
+    attach_mappings = function(prompt_bufnr, _)
+      -- Transcribe on selection
+      actions.select_default:replace(function()
+        actions.close(prompt_bufnr)
+        local selection = action_state.get_selected_entry()
+        M.transcribe_audio(selection.value)
+      end)
+
+      return true
+    end,
+  }):find()
+end
+
+-- Transcribe the most recent recording
+function M.transcribe_recent()
+  -- Check if transcriber is configured
+  if not transcriber.check_availability() then
+    vim.notify("The API server is not available. Check your configuration.", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Find the most recent recording
+  local audio_pattern = string.format("*.%s", M.config.file_format)
+  local files = vim.fn.glob(M.config.output_directory .. "/" .. audio_pattern, true, true)
+
+  if #files == 0 then
+    vim.notify("No recordings found", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Sort files by modification time (newest first)
+  table.sort(files, function(a, b)
+    return vim.fn.getftime(a) > vim.fn.getftime(b)
+  end)
+
+  -- Transcribe the most recent file
+  M.transcribe_audio(files[1])
+end
+
 -- Function to setup user configuration
 function M.setup(opts)
   opts = opts or {}
@@ -505,6 +692,11 @@ function M.setup(opts)
 
   -- Ensure output directory exists
   vim.fn.mkdir(M.config.output_directory, "p")
+
+  -- Initialize transcriber
+  if opts.transcriber then
+    transcriber.setup(opts.transcriber)
+  end
 
   return M
 end

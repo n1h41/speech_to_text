@@ -92,4 +92,86 @@ function M.close_popup()
   end
 end
 
+-- Show transcription in a floating window
+function M.show_transcription(text, opts)
+  opts = opts or {}
+  local default_opts = {
+    width = 80,
+    height = 10,
+    title = "Transcription",
+    insert_to_buffer = false,
+    insert_position = "cursor" -- cursor, append, new_buffer
+  }
+  opts = vim.tbl_deep_extend("force", default_opts, opts)
+
+  -- If requested, insert text directly into current buffer
+  if opts.insert_to_buffer then
+    if opts.insert_position == "cursor" then
+      local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+      vim.api.nvim_buf_set_text(0, row - 1, col, row - 1, col, vim.split(text, "\n"))
+    elseif opts.insert_position == "append" then
+      local line_count = vim.api.nvim_buf_line_count(0)
+      vim.api.nvim_buf_set_lines(0, line_count, line_count, false, vim.split(text, "\n"))
+    elseif opts.insert_position == "new_buffer" then
+      local buf = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(text, "\n"))
+      vim.api.nvim_win_set_buf(0, buf)
+    end
+    return
+  end
+
+  -- Create buffer for display
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(text, "\n"))
+
+  -- Set buffer options
+  vim.api.nvim_buf_set_option(buf, "modifiable", false)
+  vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
+
+  -- Create window options
+  local win_opts = {
+    relative = "editor",
+    width = opts.width,
+    height = opts.height,
+    row = math.floor((vim.o.lines - opts.height) / 2),
+    col = math.floor((vim.o.columns - opts.width) / 2),
+    style = "minimal",
+    border = "rounded",
+    title = opts.title,
+    title_pos = "center"
+  }
+
+  -- Create window
+  local win = vim.api.nvim_open_win(buf, true, win_opts)
+
+  -- Set mappings for the window
+  local keymap_opts = { noremap = true, silent = true, buffer = buf }
+  vim.keymap.set("n", "q", ":close<CR>", keymap_opts)
+  vim.keymap.set("n", "<Esc>", ":close<CR>", keymap_opts)
+  vim.keymap.set("n", "y", function()
+    vim.fn.setreg("+", text)
+    vim.notify("Transcription copied to clipboard", vim.log.levels.INFO)
+  end, keymap_opts)
+  vim.keymap.set("n", "i", function()
+    vim.api.nvim_win_close(win, true)
+    M.show_transcription(text, { insert_to_buffer = true, insert_position = "cursor" })
+  end, keymap_opts)
+  vim.keymap.set("n", "a", function()
+    vim.api.nvim_win_close(win, true)
+    M.show_transcription(text, { insert_to_buffer = true, insert_position = "append" })
+  end, keymap_opts)
+  vim.keymap.set("n", "b", function()
+    vim.api.nvim_win_close(win, true)
+    M.show_transcription(text, { insert_to_buffer = true, insert_position = "new_buffer" })
+  end, keymap_opts)
+
+  -- Show help text at the bottom
+  vim.api.nvim_buf_set_lines(buf, -1, -1, false, {
+    "",
+    "Press: q/Esc to close, y to copy, i to insert at cursor, a to append to buffer, b for new buffer"
+  })
+
+  return win, buf
+end
+
 return M
