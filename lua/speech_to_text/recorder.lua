@@ -500,7 +500,7 @@ function M.cancel_recording()
 end
 
 -- Transcribe an audio recording
-function M.transcribe_audio(file_path, opts)
+--[[ function M.transcribe_audio(file_path, opts)
   opts = opts or {}
 
   -- Validate the file
@@ -530,10 +530,10 @@ function M.transcribe_audio(file_path, opts)
     ui.show_transcription(text, { title = "Transcription: " .. vim.fn.fnamemodify(file_path, ":t") })
     vim.notify("Transcription completed", vim.log.levels.INFO)
   end)
-end 
+end  ]]
 
 -- Transcribe an audio recording
---[[ function M.transcribe_audio(file_path, opts)
+function M.transcribe_audio(file_path, opts)
   opts = opts or {}
 
   -- Validate the file
@@ -561,7 +561,7 @@ end
 
   ui.show_transcription(text, { title = "Transcription: " .. vim.fn.fnamemodify(file_path, ":t") })
   vim.notify("Transcription completed", vim.log.levels.INFO)
-end ]]
+end
 
 -- Open file selection and transcribe
 function M.transcribe_recording()

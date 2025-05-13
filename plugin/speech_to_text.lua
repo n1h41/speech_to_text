@@ -1,5 +1,4 @@
 local recorder = require("speech_to_text.recorder")
-local transcriber = require("speech_to_text.transcriber")
 
 -- Default setup with configuration
 recorder.setup({

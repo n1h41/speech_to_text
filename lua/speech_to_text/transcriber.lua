@@ -97,7 +97,6 @@ function M.transcribe_async(file_path, opts, callback)
             table.insert(stdout_data, line)
           end
         end
-        local test = vim.inspect(stdout_data)
       end
     end,
     on_stderr = function(_, data)
@@ -112,13 +111,11 @@ function M.transcribe_async(file_path, opts, callback)
     end,
     on_exit = function(_, exit_code)
       if exit_code ~= 0 then
-        local test = vim.inspect(stdout_data)
         local error_msg = table.concat(stdout_err, "\n")
         if callback then
           callback(nil, "API request failed: " .. error_msg)
         end
       else
-        local test = vim.inspect(stdout_data)
         local response = table.concat(stdout_data, "\n")
         if callback then callback(response) end
       end

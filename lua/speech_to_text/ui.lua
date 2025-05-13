@@ -57,7 +57,7 @@ function M.show_popup(message)
   local wave_length = math.floor((width - #message - 3) / 2)
 
   -- Start animation timer
-  state.timer = vim.loop.new_timer()
+  state.timer = vim.uv.new_timer()
   state.timer:start(0, animation.interval_ms, vim.schedule_wrap(function()
     if state.buf_id and vim.api.nvim_buf_is_valid(state.buf_id) then
       -- Generate symmetrical waveform on both sides
@@ -125,8 +125,10 @@ function M.show_transcription(text, opts)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(text, "\n"))
 
   -- Set buffer options
-  vim.api.nvim_buf_set_option(buf, "modifiable", false)
-  vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
+  vim.api.nvim_set_option_value("modifiable", true, { buf = buf })
+  vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = buf })
+  -- vim.api.nvim_buf_set_option(buf, "modifiable", false)
+  -- vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
 
   -- Create window options
   local win_opts = {
