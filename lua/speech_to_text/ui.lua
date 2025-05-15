@@ -1,7 +1,8 @@
 local M = {}
+local Popup = require("nui.popup")
+
 local state = {
-  win_id = nil,
-  buf_id = nil,
+  popup = nil,
   timer = nil
 }
 
@@ -25,33 +26,27 @@ function M.show_popup(message)
   -- Ensure any existing popup is closed properly
   M.close_popup()
 
-  -- Create buffer
-  state.buf_id = vim.api.nvim_create_buf(false, true)
-  if not state.buf_id then return end
-
-  -- Set initial content
-  vim.api.nvim_buf_set_lines(state.buf_id, 0, -1, false, { message })
-
   -- Calculate dimensions
   local width = math.max(50, #message + 30)
   local height = 2
-  local opts = {
-    relative = "editor",
-    width = width,
-    height = height,
-    row = math.floor((vim.o.lines - height) / 2),
-    col = math.floor((vim.o.columns - width) / 2),
-    style = "minimal",
-    border = "rounded"
-  }
 
-  -- Create window
-  state.win_id = vim.api.nvim_open_win(state.buf_id, false, opts)
-  if not state.win_id then
-    vim.api.nvim_buf_delete(state.buf_id, { force = true })
-    state.buf_id = nil
-    return
-  end
+  -- Create a popup using nui
+  state.popup = Popup({
+    position = "50%",
+    size = {
+      width = width,
+      height = height,
+    },
+    border = {
+      style = "rounded",
+    },
+    focusable = false,
+    zindex = 50,
+    enter = false,
+  })
+
+  -- Mount the popup
+  state.popup:mount()
 
   -- Calculate waveform section length
   local wave_length = math.floor((width - #message - 3) / 2)
@@ -59,12 +54,12 @@ function M.show_popup(message)
   -- Start animation timer
   state.timer = vim.uv.new_timer()
   state.timer:start(0, animation.interval_ms, vim.schedule_wrap(function()
-    if state.buf_id and vim.api.nvim_buf_is_valid(state.buf_id) then
+    if state.popup and state.popup.bufnr and vim.api.nvim_buf_is_valid(state.popup.bufnr) then
       -- Generate symmetrical waveform on both sides
       local left_wave = generate_waveform(wave_length)
       local right_wave = generate_waveform(wave_length)
       local line = left_wave .. " " .. message .. " " .. right_wave
-      pcall(vim.api.nvim_buf_set_lines, state.buf_id, 0, -1, false, { line })
+      pcall(vim.api.nvim_buf_set_lines, state.popup.bufnr, 0, -1, false, { line })
     else
       -- Buffer was deleted externally
       M.close_popup()
@@ -81,15 +76,107 @@ function M.close_popup()
     state.timer = nil
   end
 
-  if state.win_id and vim.api.nvim_win_is_valid(state.win_id) then
-    pcall(vim.api.nvim_win_close, state.win_id, true)
-    state.win_id = nil
+  if state.popup then
+    state.popup:unmount()
+    state.popup = nil
+  end
+end
+
+-- Function to show confirmation dialog with Yes/No buttons
+function M.show_confirmation(message, on_yes, on_no)
+  local width = math.max(50, #message + 10)
+
+  local popup = Popup({
+    enter = true,
+    focusable = true,
+    border = {
+      style = "rounded",
+      text = {
+        top = "Confirm",
+        top_align = "center",
+      },
+    },
+    position = "50%",
+    size = {
+      width = width,
+      height = 3,
+    },
+  })
+
+  -- Set up content with highlighted buttons
+  popup:mount()
+
+  -- Center the message text
+  local centered_message = ""
+  if #message < width - 2 then -- accounting for border
+    local padding = math.floor((width - 2 - #message) / 2)
+    centered_message = string.rep(" ", padding) .. message
+  else
+    centered_message = message
   end
 
-  if state.buf_id and vim.api.nvim_buf_is_valid(state.buf_id) then
-    pcall(vim.api.nvim_buf_delete, state.buf_id, { force = true })
-    state.buf_id = nil
-  end
+  -- Center the buttons
+  local buttons_text = "   [Yes]      [No]   "
+  local buttons_padding = math.floor((width - 2 - #buttons_text) / 2)
+  local centered_buttons = string.rep(" ", buttons_padding) .. buttons_text
+
+  -- Set initial content with buttons
+  local lines = {
+    centered_message,
+    "",
+    centered_buttons
+  }
+  vim.api.nvim_buf_set_lines(popup.bufnr, 0, -1, false, lines)
+
+  -- Calculate the starting positions for highlights based on centering
+  local yes_start = buttons_padding + 3
+  local yes_end = buttons_padding + 8
+  local no_start = buttons_padding + 15
+  local no_end = buttons_padding + 19
+
+  -- Apply highlighting for buttons
+  local ns_id = vim.api.nvim_create_namespace("speech_to_text_confirmation")
+  vim.api.nvim_buf_add_highlight(popup.bufnr, ns_id, "SpecialKey", 2, yes_start, yes_end) -- Yes
+  vim.api.nvim_buf_add_highlight(popup.bufnr, ns_id, "SpecialKey", 2, no_start, no_end)   -- No
+
+  -- Set up mappings
+  popup:map("n", "y", function()
+    popup:unmount()
+    if on_yes then on_yes() end
+  end, { noremap = true })
+
+  popup:map("n", "n", function()
+    popup:unmount()
+    if on_no then on_no() end
+  end, { noremap = true })
+
+  popup:map("n", "<Esc>", function()
+    popup:unmount()
+    if on_no then on_no() end
+  end, { noremap = true })
+
+  popup:map("n", "<LeftMouse>", function()
+    local mouse_pos = vim.fn.getmousepos()
+    if mouse_pos.winid ~= popup.winid then return end
+
+    -- Check if click was on line 3 (0-indexed)
+    if mouse_pos.line == 3 then
+      -- Yes button region
+      if mouse_pos.column >= yes_start + 1 and mouse_pos.column <= yes_end + 1 then
+        popup:unmount()
+        if on_yes then on_yes() end
+        -- No button region
+      elseif mouse_pos.column >= no_start + 1 and mouse_pos.column <= no_end + 1 then
+        popup:unmount()
+        if on_no then on_no() end
+      end
+    end
+  end, { noremap = true })
+
+  -- Return cursor to middle of window initially
+  vim.api.nvim_win_set_cursor(popup.winid, { 2, math.floor(width / 2) })
+
+  return popup
 end
 
 -- Show transcription in a floating window
@@ -120,60 +207,70 @@ function M.show_transcription(text, opts)
     return
   end
 
-  -- Create buffer for display
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(text, "\n"))
+  -- Create popup for display using nui
+  local popup = Popup({
+    enter = true,
+    focusable = true,
+    border = {
+      style = "rounded",
+      text = {
+        top = opts.title,
+        top_align = "center",
+      },
+    },
+    position = "50%",
+    size = {
+      width = opts.width,
+      height = opts.height,
+    },
+    buf_options = {
+      modifiable = true,
+      bufhidden = "wipe"
+    },
+  })
 
-  -- Set buffer options
-  vim.api.nvim_set_option_value("modifiable", true, { buf = buf })
-  vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = buf })
-  -- vim.api.nvim_buf_set_option(buf, "modifiable", false)
-  -- vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
+  -- Mount the window
+  popup:mount()
 
-  -- Create window options
-  local win_opts = {
-    relative = "editor",
-    width = opts.width,
-    height = opts.height,
-    row = math.floor((vim.o.lines - opts.height) / 2),
-    col = math.floor((vim.o.columns - opts.width) / 2),
-    style = "minimal",
-    border = "rounded",
-    title = opts.title,
-    title_pos = "center"
-  }
-
-  -- Create window
-  local win = vim.api.nvim_open_win(buf, true, win_opts)
+  -- Set content
+  vim.api.nvim_buf_set_lines(popup.bufnr, 0, -1, false, vim.split(text, "\n"))
 
   -- Set mappings for the window
-  local keymap_opts = { noremap = true, silent = true, buffer = buf }
-  vim.keymap.set("n", "q", ":close<CR>", keymap_opts)
-  vim.keymap.set("n", "<Esc>", ":close<CR>", keymap_opts)
-  vim.keymap.set("n", "y", function()
+  popup:map("n", "q", function()
+    popup:unmount()
+  end, { noremap = true })
+
+  popup:map("n", "<Esc>", function()
+    popup:unmount()
+  end, { noremap = true })
+
+  popup:map("n", "y", function()
     vim.fn.setreg("+", text)
     vim.notify("Transcription copied to clipboard", vim.log.levels.INFO)
-  end, keymap_opts)
-  vim.keymap.set("n", "i", function()
-    vim.api.nvim_win_close(win, true)
+  end, { noremap = true })
+
+  popup:map("n", "i", function()
+    popup:unmount()
     M.show_transcription(text, { insert_to_buffer = true, insert_position = "cursor" })
-  end, keymap_opts)
-  vim.keymap.set("n", "a", function()
-    vim.api.nvim_win_close(win, true)
+  end, { noremap = true })
+
+  popup:map("n", "a", function()
+    popup:unmount()
     M.show_transcription(text, { insert_to_buffer = true, insert_position = "append" })
-  end, keymap_opts)
-  vim.keymap.set("n", "b", function()
-    vim.api.nvim_win_close(win, true)
+  end, { noremap = true })
+
+  popup:map("n", "b", function()
+    popup:unmount()
     M.show_transcription(text, { insert_to_buffer = true, insert_position = "new_buffer" })
-  end, keymap_opts)
+  end, { noremap = true })
 
   -- Show help text at the bottom
-  vim.api.nvim_buf_set_lines(buf, -1, -1, false, {
+  vim.api.nvim_buf_set_lines(popup.bufnr, -1, -1, false, {
     "",
     "Press: q/Esc to close, y to copy, i to insert at cursor, a to append to buffer, b for new buffer"
   })
 
-  return win, buf
+  return popup
 end
 
 return M

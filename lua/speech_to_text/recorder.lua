@@ -469,6 +469,19 @@ function M.stop_recording()
   vim.defer_fn(function()
     if vim.fn.filereadable(output_file) == 1 then
       vim.notify("Recording saved to " .. output_file, vim.log.levels.INFO)
+
+      -- Show confirmation dialog after successful recording
+      ui.show_confirmation("Transcribe this recording now?",
+        -- On Yes
+        function()
+          -- Use the saved output file path for transcription
+          M.transcribe_audio(output_file)
+        end,
+        -- On No - just a simple notification
+        function()
+          vim.notify("You can transcribe later using TranscribeRecent command", vim.log.levels.INFO)
+        end
+      )
     else
       vim.notify("Failed to save recording to " .. output_file, vim.log.levels.ERROR)
     end
