@@ -38,6 +38,10 @@ vim.api.nvim_create_user_command("PlayRecording", function()
   recorder.browse_recordings()
 end, {})
 
+vim.api.nvim_create_user_command("StopPlayback", function()
+  recorder.stop_playback()
+end, {})
+
 vim.api.nvim_create_user_command("SelectAudioPlayer", function()
   recorder.select_playback_command()
 end, {})

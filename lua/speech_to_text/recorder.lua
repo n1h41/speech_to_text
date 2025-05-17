@@ -13,6 +13,7 @@ local state = {
     { name = "mpv",    cmd = "mpv --no-video" },
     { name = "cvlc",   cmd = "cvlc --play-and-exit" },
   },
+  currently_playing_cmd_job_id = nil,
 }
 
 
@@ -35,7 +36,8 @@ local function command_exists(cmd)
   return vim.fn.executable(cmd) == 1
 end
 
--- Function to play audio file
+--- Play an audio file using the configured playback command
+---@param file_path string
 function M.play_audio(file_path)
   if not file_path or vim.fn.filereadable(file_path) == 0 then
     vim.notify("Invalid audio file: " .. (file_path or "nil"), vim.log.levels.ERROR)
@@ -67,13 +69,27 @@ function M.play_audio(file_path)
     end
   })
 
+  state.currently_playing_cmd_job_id = job_id
+
   if job_id <= 0 then
     ui.close_popup()
     vim.notify("Failed to start playback", vim.log.levels.ERROR)
   end
 end
 
--- Function to select playback command from available options
+--- Stop the current playback
+function M.stop_playback()
+  if state.currently_playing_cmd_job_id then
+    vim.fn.jobstop(state.currently_playing_cmd_job_id)
+    state.currently_playing_cmd_job_id = nil
+    ui.close_popup()
+    vim.notify("Playback stopped", vim.log.levels.INFO)
+  else
+    vim.notify("No playback in progress", vim.log.levels.WARN)
+  end
+end
+
+--- Select an audio player using Telescope
 function M.select_playback_command()
   local pickers = require("telescope.pickers")
   local finders = require("telescope.finders")
@@ -107,7 +123,8 @@ function M.select_playback_command()
   }):find()
 end
 
--- Generate output filename with timestamp
+--- Generate a unique filename for the recording
+---@return string
 local function generate_output_filename()
   local timestamp = os.date("%Y%m%d_%H%M%S")
   return string.format("%s/recording_%s.%s",
@@ -242,7 +259,9 @@ function M.browse_recordings()
   }):find()
 end
 
--- Parse PulseAudio input sources from pactl
+---comment
+---@param output string
+---@return table
 local function parse_pulse_sources(output)
   local sources = {}
   local current_source = {}
@@ -293,7 +312,7 @@ local function parse_pulse_sources(output)
   return sources
 end
 
--- Telescope input device selector
+--- Select an input device using PulseAudio
 function M.select_input_device()
   if not command_exists("pactl") then
     vim.notify("Error: 'pactl' not found. Please install PulseAudio or PipeWire-PulseAudio.", vim.log.levels.ERROR)
@@ -359,7 +378,8 @@ function M.select_input_device()
   }):find()
 end
 
--- Try to find the best default source if none is set
+--- Ensure the input source is set correctly
+---@return boolean
 local function ensure_input_source()
   -- If using default but it's not been specifically set, try to find a better one
   if state.input_device == "default" then
@@ -377,6 +397,7 @@ local function ensure_input_source()
   return true
 end
 
+--- Start recording audio using FFmpeg
 function M.start_recording()
   if not command_exists("ffmpeg") then
     vim.notify("Error: 'ffmpeg' not found. Please install FFmpeg.", vim.log.levels.ERROR)
@@ -451,6 +472,7 @@ function M.start_recording()
   vim.notify("Started recording from " .. state.input_device, vim.log.levels.INFO)
 end
 
+--- Stop the current recording
 function M.stop_recording()
   if not state.recording then
     vim.notify("No active recording to stop.", vim.log.levels.WARN)
@@ -488,6 +510,7 @@ function M.stop_recording()
   end, 200)
 end
 
+--- Cancel the current recording
 function M.cancel_recording()
   if not state.recording then
     vim.notify("No active recording to cancel.", vim.log.levels.WARN)
@@ -511,39 +534,6 @@ function M.cancel_recording()
     end
   end, 200)
 end
-
--- Transcribe an audio recording
---[[ function M.transcribe_audio(file_path, opts)
-  opts = opts or {}
-
-  -- Validate the file
-  if not file_path or vim.fn.filereadable(file_path) == 0 then
-    vim.notify("Invalid audio file: " .. (file_path or "nil"), vim.log.levels.ERROR)
-    return
-  end
-
-  -- Show transcribing notification
-  ui.show_popup("Transcribing audio...")
-
-  -- Call the transcriber
-  transcriber.transcribe_async(file_path, opts, function(text, err)
-    ui.close_popup()
-
-    if err then
-      vim.notify("Transcription failed: " .. err, vim.log.levels.ERROR)
-      return
-    end
-
-    if not text or text == "" then
-      vim.notify("Received empty transcription", vim.log.levels.WARN)
-      return
-    end
-
-    -- Display the transcription
-    ui.show_transcription(text, { title = "Transcription: " .. vim.fn.fnamemodify(file_path, ":t") })
-    vim.notify("Transcription completed", vim.log.levels.INFO)
-  end)
-end  ]]
 
 -- Transcribe an audio recording
 function M.transcribe_audio(file_path, opts)
