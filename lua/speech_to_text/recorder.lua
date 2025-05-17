@@ -548,22 +548,24 @@ function M.transcribe_audio(file_path, opts)
   -- Show transcribing notification
   ui.show_popup("Transcribing audio...")
 
-  local text, err = transcriber.transcribe(file_path, opts)
+  local job_id = transcriber.transcribe_async(file_path, opts, function(text, err)
+    -- Close the popup and handle errors
+    ui.close_popup()
 
-  ui.close_popup()
+    if err then
+      vim.notify("Transcription failed: " .. err, vim.log.levels.ERROR)
+      return
+    end
 
-  if err then
-    vim.notify("Transcription failed: " .. err, vim.log.levels.ERROR)
-    return
-  end
+    if not text or text == "" then
+      vim.notify("Received empty transcription", vim.log.levels.WARN)
+      return
+    end
 
-  if not text or text == "" then
-    vim.notify("Received empty transcription", vim.log.levels.WARN)
-    return
-  end
-
-  ui.show_transcription(text, { title = "Transcription: " .. vim.fn.fnamemodify(file_path, ":t") })
-  vim.notify("Transcription completed", vim.log.levels.INFO)
+    -- Show the transcription in a popup
+    ui.show_transcription(text, { title = "Transcription: " .. vim.fn.fnamemodify(file_path, ":t") })
+    vim.notify("Transcription completed", vim.log.levels.INFO)
+  end)
 end
 
 -- Open file selection and transcribe
@@ -664,12 +666,6 @@ end
 
 -- Transcribe the most recent recording
 function M.transcribe_recent()
-  -- Check if transcriber is configured
-  if not transcriber.check_availability() then
-    vim.notify("The API server is not available. Check your configuration.", vim.log.levels.ERROR)
-    return
-  end
-
   -- Find the most recent recording
   local audio_pattern = string.format("*.%s", M.config.file_format)
   local files = vim.fn.glob(M.config.output_directory .. "/" .. audio_pattern, true, true)

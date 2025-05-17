@@ -64,6 +64,7 @@ vim.keymap.set("n", "<leader>ss", ":StopRecording<CR>", { desc = "Stop Recording
 vim.keymap.set("n", "<leader>sc", ":CancelRecording<CR>", { desc = "Cancel Recording" })
 vim.keymap.set("n", "<leader>si", ":SelectInputDevice<CR>", { desc = "Select Input Device" })
 vim.keymap.set("n", "<leader>sp", ":PlayRecording<CR>", { desc = "Play Recording" })
+vim.keymap.set("n", "<leader>sq", ":StopPlayback<CR>", { desc = "Stop Playback" })
 vim.keymap.set("n", "<leader>sa", ":SelectAudioPlayer<CR>", { desc = "Select Audio Player" })
 vim.keymap.set("n", "<leader>st", ":TranscribeRecording<CR>", { desc = "Transcribe Recording" })
 vim.keymap.set("n", "<leader>sT", ":TranscribeRecent<CR>", { desc = "Transcribe Most Recent Recording" })

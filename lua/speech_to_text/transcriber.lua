@@ -80,6 +80,11 @@ function M.transcribe(file_path, opts)
   return output, nil
 end
 
+---comment
+---@param file_path string
+---@param opts table
+---@param callback function
+---@return number | nil
 function M.transcribe_async(file_path, opts, callback)
   opts = opts or {}
   opts = vim.tbl_deep_extend("force", config, opts)
@@ -92,13 +97,14 @@ function M.transcribe_async(file_path, opts, callback)
   end
 
   local cmd = build_curl_command(file_path, opts)
+  local cmd_str = table.concat(cmd, " ")
 
   -- Setup buffers for stdout and stderr
   local stdout_data = {}
   local stdout_err = {}
 
   -- Execute curl command
-  local job_id = vim.fn.jobstart(cmd, {
+  local job_id = vim.fn.jobstart(cmd_str, {
     on_stdout = function(_, data)
       if data then
         for _, line in ipairs(data) do
@@ -113,7 +119,6 @@ function M.transcribe_async(file_path, opts, callback)
         for _, line in ipairs(data) do
           if line and line ~= "" then
             table.insert(stdout_err, line)
-            print("CURL ERROR: " .. line)
           end
         end
       end
@@ -122,7 +127,7 @@ function M.transcribe_async(file_path, opts, callback)
       if exit_code ~= 0 then
         local error_msg = table.concat(stdout_err, "\n")
         if callback then
-          callback(nil, "API request failed: " .. error_msg)
+          callback(nil, "API request failed: " .. error_msg .. " (exit code: " .. exit_code .. ")")
         end
       else
         local response = table.concat(stdout_data, "\n")
