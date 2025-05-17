@@ -31,7 +31,9 @@ M.config = {
   },
 }
 
--- Check if a command is available
+--- Check if a command exists in the system
+---@param cmd string
+---@return boolean
 local function command_exists(cmd)
   return vim.fn.executable(cmd) == 1
 end
@@ -497,7 +499,7 @@ function M.stop_recording()
         -- On Yes
         function()
           -- Use the saved output file path for transcription
-          M.transcribe_audio(output_file)
+          M.transcribe_audio(output_file, {})
         end,
         -- On No - just a simple notification
         function()
@@ -535,7 +537,9 @@ function M.cancel_recording()
   end, 200)
 end
 
--- Transcribe an audio recording
+---comment
+---@param file_path string
+---@param opts table
 function M.transcribe_audio(file_path, opts)
   opts = opts or {}
 
@@ -548,7 +552,7 @@ function M.transcribe_audio(file_path, opts)
   -- Show transcribing notification
   ui.show_popup("Transcribing audio...")
 
-  local job_id = transcriber.transcribe_async(file_path, opts, function(text, err)
+  transcriber.transcribe_async(file_path, opts, function(text, err)
     -- Close the popup and handle errors
     ui.close_popup()
 
@@ -570,12 +574,6 @@ end
 
 -- Open file selection and transcribe
 function M.transcribe_recording()
-  -- Check if transcriber is configured
-  --[[ if not transcriber.check_availability() then
-    vim.notify("The API server is not available. Check your configuration.", vim.log.levels.ERROR)
-    return
-  end ]]
-
   -- Check if telescope is installed
   local has_telescope, _ = pcall(require, "telescope.builtin")
   if not has_telescope then
@@ -656,7 +654,7 @@ function M.transcribe_recording()
       actions.select_default:replace(function()
         actions.close(prompt_bufnr)
         local selection = action_state.get_selected_entry()
-        M.transcribe_audio(selection.value)
+        M.transcribe_audio(selection.value, {})
       end)
 
       return true
@@ -681,7 +679,7 @@ function M.transcribe_recent()
   end)
 
   -- Transcribe the most recent file
-  M.transcribe_audio(files[1])
+  M.transcribe_audio(files[1], {})
 end
 
 -- Function to setup user configuration
