@@ -18,6 +18,10 @@ function M.get_config()
   return config
 end
 
+--- Build the curl command for transcription
+---@param file_path string
+---@param opts table
+---@return table
 local function build_curl_command(file_path, opts)
   local endpoint = opts.endpoint or config.endpoint
   local cmd = {
@@ -49,6 +53,11 @@ local function build_curl_command(file_path, opts)
   return cmd
 end
 
+--- Transcribe an audio file using the configured endpoint
+---@param file_path string
+---@param opts table
+---@return nil
+---@return string | nil
 function M.transcribe(file_path, opts)
   opts = opts or {}
   opts = vim.tbl_deep_extend("force", config, opts)
@@ -68,7 +77,7 @@ function M.transcribe(file_path, opts)
     return nil, "API request failed: " .. output
   end
 
-  return output
+  return output, nil
 end
 
 function M.transcribe_async(file_path, opts, callback)
@@ -141,7 +150,6 @@ function M.transcribe_async(file_path, opts, callback)
   return job_id
 end
 
--- Check if the API is available by sending a small request
 function M.check_availability(callback)
   local cmd = { "curl", "-s", "-X", "POST", "-o", "/dev/null", "-w", "%{http_code}", config.endpoint }
 
@@ -165,7 +173,11 @@ function M.check_availability(callback)
   end
 end
 
--- Detect the language of an audio file
+--- Detect the language of an audio file
+---@param file_path string
+---@param opts table
+---@param callback function
+---@return nil
 function M.detect_language(file_path, opts, callback)
   opts = opts or {}
   local detect_opts = vim.tbl_deep_extend("force", opts, {

@@ -2,8 +2,6 @@
 
 A Neovim plugin that enables speech-to-text conversion directly within your editor. Record audio using your system microphone, then transcribe it automatically into your buffer.
 
-![Plugin Demo](https://example.com/demo.gif)
-
 ## Features
 
 - Record audio directly from Neovim using your system microphone
@@ -16,7 +14,7 @@ A Neovim plugin that enables speech-to-text conversion directly within your edit
 
 ## Requirements
 
-- Neovim 0.7+ 
+- Neovim 0.7+
 - FFmpeg (for recording and processing audio)
 - PulseAudio or PipeWire-PulseAudio (for audio input management)
 - An audio playback utility (one of):
@@ -64,7 +62,7 @@ require("speech_to_text.recorder").setup({
   file_format = "wav",                           -- Audio format
   sample_rate = "44100",                         -- Sample rate in Hz
   bit_depth = "16",                              -- Bit depth
-  
+
   -- Transcription settings
   transcriber = {
     endpoint = "http://localhost:9000/asr",      -- URL of the transcription API
@@ -80,30 +78,30 @@ require("speech_to_text.recorder").setup({
 
 The plugin creates the following commands:
 
-| Command | Description |
-|---------|-------------|
-| `:StartRecording` | Begin recording audio |
-| `:StopRecording` | Stop and save the recording |
-| `:CancelRecording` | Cancel recording and delete file |
-| `:SelectInputDevice` | Select audio input device |
-| `:PlayRecording` | Browse and play saved recordings |
-| `:SelectAudioPlayer` | Choose audio playback application |
-| `:TranscribeRecording` | Select recording to transcribe |
-| `:TranscribeRecent` | Transcribe most recent recording |
+| Command                | Description                       |
+| ---------------------- | --------------------------------- |
+| `:StartRecording`      | Begin recording audio             |
+| `:StopRecording`       | Stop and save the recording       |
+| `:CancelRecording`     | Cancel recording and delete file  |
+| `:SelectInputDevice`   | Select audio input device         |
+| `:PlayRecording`       | Browse and play saved recordings  |
+| `:SelectAudioPlayer`   | Choose audio playback application |
+| `:TranscribeRecording` | Select recording to transcribe    |
+| `:TranscribeRecent`    | Transcribe most recent recording  |
 
 ## Default Keymaps
 
 The plugin sets up these default keymaps:
 
-| Keymap | Description |
-|--------|-------------|
-| `<leader>sr` | Start recording |
-| `<leader>ss` | Stop recording |
-| `<leader>sc` | Cancel recording |
-| `<leader>si` | Select input device |
-| `<leader>sp` | Play recording |
-| `<leader>sa` | Select audio player |
-| `<leader>st` | Transcribe recording |
+| Keymap       | Description                      |
+| ------------ | -------------------------------- |
+| `<leader>sr` | Start recording                  |
+| `<leader>ss` | Stop recording                   |
+| `<leader>sc` | Cancel recording                 |
+| `<leader>si` | Select input device              |
+| `<leader>sp` | Play recording                   |
+| `<leader>sa` | Select audio player              |
+| `<leader>st` | Transcribe recording             |
 | `<leader>sT` | Transcribe most recent recording |
 
 ## Usage
@@ -129,12 +127,14 @@ If you have multiple microphones, use `:SelectInputDevice` or `<leader>si` to ch
 ### Managing Recordings
 
 Use `:PlayRecording` or `<leader>sp` to browse your saved recordings. From this view, you can:
+
 - Select a recording to play it
 - Press `<c-d>` to delete a recording
 
 ### Changing Audio Player
 
 The plugin supports multiple audio playback applications. Use `:SelectAudioPlayer` or `<leader>sa` to choose between:
+
 - FFplay (default)
 - mpv
 - VLC (cvlc)
@@ -144,6 +144,7 @@ The plugin supports multiple audio playback applications. Use `:SelectAudioPlaye
 For the transcription functionality to work, you need a compatible API service running. The plugin is configured to work with ASR (Automated Speech Recognition) APIs that accept POST requests with audio files.
 
 You can use open-source solutions like:
+
 - [Whisper API](https://github.com/openai/whisper) (local server)
 - [Coqui STT](https://github.com/coqui-ai/STT)
 

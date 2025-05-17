@@ -714,6 +714,7 @@ function M.setup(opts)
   return M
 end
 
+--- Delete all recordings in the output directory
 function M.delete_all_recordings()
   local cmd = "rm -rf " .. vim.fn.shellescape(M.config.output_directory)
   vim.fn.jobstart(cmd, {
