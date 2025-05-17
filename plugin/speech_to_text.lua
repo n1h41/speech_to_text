@@ -50,6 +50,10 @@ vim.api.nvim_create_user_command("TranscribeRecent", function()
   recorder.transcribe_recent()
 end, {})
 
+vim.api.nvim_create_user_command("DeleteAllRecordings", function()
+  recorder.delete_all_recordings()
+end, {})
+
 
 vim.keymap.set("n", "<leader>sr", ":StartRecording<CR>", { desc = "Start Recording" })
 vim.keymap.set("n", "<leader>ss", ":StopRecording<CR>", { desc = "Stop Recording" })
@@ -59,3 +63,4 @@ vim.keymap.set("n", "<leader>sp", ":PlayRecording<CR>", { desc = "Play Recording
 vim.keymap.set("n", "<leader>sa", ":SelectAudioPlayer<CR>", { desc = "Select Audio Player" })
 vim.keymap.set("n", "<leader>st", ":TranscribeRecording<CR>", { desc = "Transcribe Recording" })
 vim.keymap.set("n", "<leader>sT", ":TranscribeRecent<CR>", { desc = "Transcribe Most Recent Recording" })
+vim.keymap.set("n", "<leader>sd", ":DeleteAllRecordings<CR>", { desc = "Delete all recordings" })
