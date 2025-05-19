@@ -701,15 +701,28 @@ end
 --- Delete all recordings in the output directory
 function M.delete_all_recordings()
   local cmd = "rm -rf " .. vim.fn.shellescape(M.config.output_directory)
-  vim.fn.jobstart(cmd, {
-    on_exit = function(_, exit_code)
-      if exit_code ~= 0 then
-        vim.notify("Failed to delete recordings: " .. exit_code, vim.log.levels.ERROR)
-        return
-      end
-      vim.notify("All recordings deleted successfully.", vim.log.levels.INFO)
+
+  ui.show_confirmation("Delete all recordings?",
+    -- On Yes
+    function()
+      vim.notify("Deleting all recordings...", vim.log.levels.INFO)
+      vim.fn.jobstart(cmd,
+        {
+          on_exit = function(_, exit_code)
+            if exit_code ~= 0 then
+              vim.notify("Failed to delete recordings: " .. exit_code, vim.log.levels.ERROR)
+              return
+            end
+            vim.notify("All recordings deleted successfully.", vim.log.levels.INFO)
+          end
+        }
+      )
+    end,
+    -- On No
+    function()
+      vim.notify("Deletion canceled", vim.log.levels.INFO)
     end
-  })
+  )
 end
 
 return M

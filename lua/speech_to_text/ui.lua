@@ -82,7 +82,11 @@ function M.close_popup()
   end
 end
 
--- Function to show confirmation dialog with Yes/No buttons
+---comment
+---@param message string
+---@param on_yes function
+---@param on_no function
+---@return NuiPopup
 function M.show_confirmation(message, on_yes, on_no)
   local width = math.max(50, #message + 10)
 
