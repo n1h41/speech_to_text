@@ -18,6 +18,33 @@ function M.get_config()
   return config
 end
 
+local function normalize_text(text)
+  -- Replace Neovim variants
+  text = text:gsub("[Nn][Ee][Oo][VvWw]?[Ii1lL][Mm]?", "Neovim")
+  --Replace Yobim with Neovim
+  text = text:gsub("[Yy][Oo][Bb][Ii][Mm]", "Neovim")
+  -- Replace Niobim with Neovim
+  text = text:gsub("[Nn][Ii][Oo][Bb][Ii][Mm]", "Neovim")
+  -- Replace Neel Bim with Neovim
+  text = text:gsub("[Nn][Ee][Ee][Ll]%s*[Bb][Ii][Mm]", "Neovim")
+
+
+  -- Replace MCP variants
+  text = text:gsub("[Mm][Cc][Pp]%s*[Tt][Oo][Oo][Ll]", "@mcp")
+  text = text:gsub("^[Mm][Cc][Pp].*", "@mcp")
+
+  -- Replace editor tool variants
+  text = text:gsub("[Ee][Dd][Ii][Tt][Oo][Rr]%s+[Tt][Oo][Oo][Ll]", "@editor")
+
+  -- Replace buffer with #buffer
+  text = text:gsub("[Bb][Uu][Ff][Ff][Ee][Rr]", "#buffer")
+
+  -- Replace buffer watch with #buffer{watch}
+  text = text:gsub("[Bb][Uu][Ff][Ff][Ee][Rr]%s*[Ww][Aa][Tt][Cc][Hh]", "#buffer{watch}")
+
+  return text
+end
+
 --- Build the curl command for transcription
 ---@param file_path string
 ---@param opts table
@@ -131,6 +158,7 @@ function M.transcribe_async(file_path, opts, callback)
         end
       else
         local response = table.concat(stdout_data, "\n")
+        response = normalize_text(response)
         if callback then callback(response) end
       end
     end,
