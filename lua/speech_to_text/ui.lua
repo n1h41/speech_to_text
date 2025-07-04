@@ -190,7 +190,7 @@ function M.show_transcription(text, opts)
     width = 80,
     height = 10,
     title = "Transcription",
-    insert_to_buffer = false,
+    insert_to_buffer = true,
     insert_position = "cursor" -- cursor, append, new_buffer
   }
   opts = vim.tbl_deep_extend("force", default_opts, opts)

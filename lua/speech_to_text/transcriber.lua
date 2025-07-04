@@ -19,28 +19,20 @@ function M.get_config()
 end
 
 local function normalize_text(text)
-  -- Replace Neovim variants
-  text = text:gsub("[Nn][Ee][Oo][VvWw]?[Ii1lL][Mm]?", "Neovim")
-  --Replace Yobim with Neovim
-  text = text:gsub("[Yy][Oo][Bb][Ii][Mm]", "Neovim")
-  -- Replace Niobim with Neovim
-  text = text:gsub("[Nn][Ii][Oo][Bb][Ii][Mm]", "Neovim")
-  -- Replace Neel Bim with Neovim
-  text = text:gsub("[Nn][Ee][Ee][Ll]%s*[Bb][Ii][Mm]", "Neovim")
-
-
   -- Replace MCP variants
-  text = text:gsub("[Mm][Cc][Pp]%s*[Tt][Oo][Oo][Ll]", "@mcp")
-  text = text:gsub("^[Mm][Cc][Pp].*", "@mcp")
+  text = text:gsub("[Mm][Cc][Pp]%s", "@mcp ")
 
   -- Replace editor tool variants
-  text = text:gsub("[Ee][Dd][Ii][Tt][Oo][Rr]%s+[Tt][Oo][Oo][Ll]", "@editor")
+  text = text:gsub("[Ee][Dd][Ii][Tt][Oo][Rr]%s", "@editor ")
+
+  -- Replace watch buffer with #buffer{watch}
+  text = text:gsub("[Ww][Aa][Tt][Cc][Hh]%s+[Bb][Uu][Ff][Ff][Ee][Rr]%s", "#buffer{watch} ")
 
   -- Replace buffer with #buffer
-  text = text:gsub("[Bb][Uu][Ff][Ff][Ee][Rr]", "#buffer")
+  text = text:gsub("[Bb][Uu][Ff][Ff][Ee][Rr]%s", "#buffer ")
 
-  -- Replace buffer watch with #buffer{watch}
-  text = text:gsub("[Bb][Uu][Ff][Ff][Ee][Rr]%s*[Ww][Aa][Tt][Cc][Hh]", "#buffer{watch}")
+  -- Replace lsp with #lsp
+  text = text:gsub("[Ll][Ss][Pp]%s", "#lsp ")
 
   return text
 end
