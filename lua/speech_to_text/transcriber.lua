@@ -19,6 +19,8 @@ function M.get_config()
 end
 
 local function normalize_text(text)
+  local buffer_substitution_made = false
+
   -- Replace MCP variants
   text = text:gsub("[Mm][Cc][Pp]%s*", "@mcp ")
 
@@ -26,10 +28,14 @@ local function normalize_text(text)
   text = text:gsub("[Ee][Dd][Ii][Tt][Oo][Rr]%s*", "@editor ")
 
   -- Replace watch buffer with #buffer{watch}
-  text = text:gsub("[Ww][Aa][Tt][Cc][Hh]%s+[Bb][Uu][Ff][Ff][Ee][Rr]%s*", "#buffer{watch} ")
+  local count
+  text, count = text:gsub("[Ww][Aa][Tt][Cc][Hh]%s[Bb][Uu][Ff][Ff][Ee][Rr]%s*", "#buffer{watch} ")
+  if count > 0 then buffer_substitution_made = true end
 
-  -- Replace buffer with #buffer
-  text = text:gsub("[Bb][Uu][Ff][Ff][Ee][Rr]%s*", "#buffer ")
+  if not buffer_substitution_made then
+    -- Replace buffer with #buffer
+    text = text:gsub("[Bb][Uu][Ff][Ff][Ee][Rr]%s*", "#buffer ")
+  end
 
   -- Replace lsp with #lsp
   text = text:gsub("[Ll][Ss][Pp]%s*", "#lsp ")
