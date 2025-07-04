@@ -20,19 +20,19 @@ end
 
 local function normalize_text(text)
   -- Replace MCP variants
-  text = text:gsub("[Mm][Cc][Pp]%s", "@mcp ")
+  text = text:gsub("[Mm][Cc][Pp]%s*", "@mcp ")
 
   -- Replace editor tool variants
-  text = text:gsub("[Ee][Dd][Ii][Tt][Oo][Rr]%s", "@editor ")
+  text = text:gsub("[Ee][Dd][Ii][Tt][Oo][Rr]%s*", "@editor ")
 
   -- Replace watch buffer with #buffer{watch}
-  text = text:gsub("[Ww][Aa][Tt][Cc][Hh]%s+[Bb][Uu][Ff][Ff][Ee][Rr]%s", "#buffer{watch} ")
+  text = text:gsub("[Ww][Aa][Tt][Cc][Hh]%s+[Bb][Uu][Ff][Ff][Ee][Rr]%s*", "#buffer{watch} ")
 
   -- Replace buffer with #buffer
-  text = text:gsub("[Bb][Uu][Ff][Ff][Ee][Rr]%s", "#buffer ")
+  text = text:gsub("[Bb][Uu][Ff][Ff][Ee][Rr]%s*", "#buffer ")
 
   -- Replace lsp with #lsp
-  text = text:gsub("[Ll][Ss][Pp]%s", "#lsp ")
+  text = text:gsub("[Ll][Ss][Pp]%s*", "#lsp ")
 
   return text
 end
