@@ -1,8 +1,9 @@
-local M = {}
-local ui = require("speech_to_text.ui")
+local M           = {}
+local ui          = require("speech_to_text.ui")
 local transcriber = require("speech_to_text.transcriber")
+local logger      = require("speech_to_text.logger")
 
-local state = {
+local state       = {
 	recording = false,
 	job_id = nil,
 	output_file = "/tmp/nvim_speech_to_text/speech_record.wav",
@@ -42,14 +43,14 @@ end
 ---@param file_path string
 function M.play_audio(file_path)
 	if not file_path or vim.fn.filereadable(file_path) == 0 then
-		vim.notify("Invalid audio file: " .. (file_path or "nil"), vim.log.levels.ERROR)
+		logger.log("Invalid audio file: " .. (file_path or "nil"))
 		return
 	end
 
 	-- Extract just the command name for executable check
 	local cmd_name = M.config.playback_command:match("^(%S+)")
 	if not command_exists(cmd_name) then
-		vim.notify("Playback command not found: " .. cmd_name, vim.log.levels.ERROR)
+		logger.log("Playback command not found: " .. cmd_name)
 		return
 	end
 
@@ -67,7 +68,7 @@ function M.play_audio(file_path)
 			vim.schedule(function()
 				ui.close_popup()
 				if exit_code ~= 0 then
-					vim.notify("Playback failed with exit code: " .. exit_code, vim.log.levels.ERROR)
+					logger.log("Playback failed with exit code: " .. exit_code)
 				end
 			end)
 		end
@@ -77,7 +78,7 @@ function M.play_audio(file_path)
 
 	if job_id <= 0 then
 		ui.close_popup()
-		vim.notify("Failed to start playback", vim.log.levels.ERROR)
+		logger.log("Failed to start playback command: " .. cmd)
 	end
 end
 

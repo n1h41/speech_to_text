@@ -1,5 +1,6 @@
 local M = {}
 local Popup = require("nui.popup")
+local logger = require("speech_to_text.logger")
 
 local state = {
 	popup = nil,
@@ -263,7 +264,7 @@ function M.show_transcription(text, opts)
 
 	popup:map("n", "y", function()
 		vim.fn.setreg("+", text)
-		vim.notify("Transcription copied to clipboard", vim.log.levels.INFO)
+		logger.log("Transcription copied to clipboard: " .. text)
 	end, { noremap = true })
 
 	popup:map("n", "i", function()
